@@ -1,5 +1,42 @@
-# Vue 3 + Vite
+# CryptoTracker
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+CryptoTracker is a real-time cryptocurrency dashboard built with Vue 3, Vite, Vuetify, and Highcharts. Track live prices, view time-series charts, and monitor crypto markets within a modern, responsive interface.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## Features
+- Real-time crypto price updates
+- Interactive price and trend charts
+- Responsive Vuetify UI
+- Vue 3 Composition API with `<script setup>`
+- Modular, maintainable codebase
+
+## Tech Stack
+- **Vue 3** — core frontend framework
+- **Vite** — lightning fast build tool
+- **Vuetify** — Material Design component framework
+- **Element Plus** — UI framework (additional components)
+- **Highcharts & Highcharts-Vue** — advanced charting
+- **Pinia** — state management
+- **Axios** — HTTP client
+- **Firebase** — realtime database & authentication
+- **mdi/font** — Material Design Icons
+- **Vue Router** — routing
+
+## Project Setup
+```bash
+git clone https://github.com/Dnikodij/crypto-tracker.git
+cd crypto-tracker
+npm install
+```
+
+### Development
+```bash
+npm run dev
+```
+
+### Build
+```bash
+npm run build
+```
+
+
+
