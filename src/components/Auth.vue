@@ -1,5 +1,5 @@
 <template>
-  <v-container>
+  <v-container fluid class="d-flex align-center justify-center h-100">
     <v-card class="pa-4 mx-auto" max-width="400">
       <v-card-title>Firebase Auth</v-card-title>
       <v-card-text>
@@ -40,6 +40,7 @@
 
 <script>
 import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import { auth } from "../firebase.js";
 import {
   createUserWithEmailAndPassword,
@@ -55,6 +56,7 @@ export default {
     const password = ref("");
     const errorMessage = ref("");
     const user = ref(null);
+    const router = useRouter();
 
     const signUp = async () => {
       errorMessage.value = "";
@@ -65,6 +67,7 @@ export default {
             password.value
         );
         user.value = res.user;
+        router.push({ name: 'Dashboard' });
       } catch (error) {
         errorMessage.value = error.message;
       }
@@ -79,6 +82,7 @@ export default {
             password.value
         );
         user.value = res.user;
+        router.push({ name: 'Dashboard' });
       } catch (error) {
         errorMessage.value = error.message;
       }
@@ -93,7 +97,6 @@ export default {
       }
     };
 
-    // Listen for auth state changes
     onMounted(() => {
       onAuthStateChanged(auth, (currentUser) => {
         user.value = currentUser;

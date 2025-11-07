@@ -1,58 +1,63 @@
 import { ref, onMounted, onUnmounted, watch, isRef, computed } from 'vue';
 
-/**
- * @typedef {Object.<string, string>} CryptoPrices
- * Key is the crypto ID (e.g., 'bitcoin'), value is the price in USD.
- */
+const coinIdToSymbolMap = {
+  'bitcoin': 'BTC',
+  'ethereum': 'ETH',
+  'litecoin': 'LTC'
+};
 
-/**
- * Connects to CoinCap WebSocket API for real-time crypto prices.
- * @param {import('vue').Ref<string[]> | string[]} assetIdsOrRef - Reactive ref or static array of crypto asset IDs to track (e.g., ref(['bitcoin', 'ethereum'])).
- * @returns {{prices: import('vue').Ref<CryptoPrices>, isConnected: import('vue').Ref<boolean>, error: import('vue').Ref<Error|null>}}
- */
 export function useRealtimeCryptoData(assetIdsOrRef) {
-  /** @type {import('vue').Ref<CryptoPrices>} */
   const prices = ref({});
   const isConnected = ref(false);
   const error = ref(null);
   let socket = null;
+  let subscriptions = [];
 
-  // Ensure we are working with a computed ref for assets
   const currentAssetIds = computed(() => {
     return isRef(assetIdsOrRef) ? assetIdsOrRef.value : assetIdsOrRef;
   });
 
   const connect = () => {
-    disconnect(); // Ensure previous connection is closed before opening a new one
+    disconnect();
 
     const assetIds = currentAssetIds.value;
-    // Only connect if assetIds are provided
     if (!assetIds || assetIds.length === 0) {
-      console.warn('useRealtimeCryptoData: No asset IDs provided or list is empty.');
-      isConnected.value = false;
-      // Clear prices when not connected to any assets
-      prices.value = {};
+      console.warn('useRealtimeCryptoData: No asset IDs provided.');
       return;
     }
 
-    const assetsQueryParam = assetIds.join(',');
-    const socketUrl = `wss://ws.coincap.io/prices?assets=${assetsQueryParam}`;
+    const apiKey = '23aed295e461710c6a55ea5604ce626fb0494ea71822c0a1316dc31fed9ab223'; 
 
-    console.log('Attempting to connect to CoinCap WebSocket for:', assetsQueryParam);
-    socket = new WebSocket(socketUrl);
+    if (!apiKey) {
+        console.error('CryptoCompare API key is missing. Please add it to useRealtimeCryptoData.js');
+        error.value = new Error('CryptoCompare API key is missing.');
+        return;
+    }
+
+    socket = new WebSocket(`wss://streamer.cryptocompare.com/v2?api_key=${apiKey}`);
 
     socket.onopen = () => {
       isConnected.value = true;
       error.value = null;
-      console.log('Connected to CoinCap WebSocket for:', assetsQueryParam);
+      console.log('Connected to CryptoCompare WebSocket.');
+      
+      const assetSymbols = assetIds.map(id => coinIdToSymbolMap[id.toLowerCase()]);
+      subscriptions = assetSymbols.map(symbol => `2~Coinbase~${symbol}~USD`);
+
+      socket.send(JSON.stringify({
+        action: 'SubAdd',
+        subs: subscriptions
+      }));
     };
 
     socket.onmessage = (event) => {
-      try {
-        const update = JSON.parse(event.data);
-        prices.value = { ...prices.value, ...update };
-      } catch (e) {
-        console.error('Error parsing WebSocket message:', e);
+      const update = JSON.parse(event.data);
+      if (update.TYPE === '2' && update.PRICE) {
+        const fromSymbol = update.FROMSYMBOL.toUpperCase();
+        const coinId = Object.keys(coinIdToSymbolMap).find(key => coinIdToSymbolMap[key] === fromSymbol);
+        if (coinId) {
+          prices.value = { ...prices.value, [coinId]: update.PRICE };
+        }
       }
     };
 
@@ -60,66 +65,68 @@ export function useRealtimeCryptoData(assetIdsOrRef) {
       console.error('WebSocket Error:', err);
       error.value = new Error('WebSocket connection error.');
       isConnected.value = false;
-      // Consider adding reconnection logic here
     };
 
     socket.onclose = (event) => {
+      console.log('WebSocket closed:', event.code, event.reason);
       isConnected.value = false;
-      console.log('WebSocket closed:', event.code, event.reason || 'Normal closure');
-      // Clear prices if the connection closes unexpectedly?
-      // prices.value = {}; // Optional: depends on desired behavior
-      // Consider adding reconnection logic here if closed unexpectedly
     };
   };
 
   const disconnect = () => {
-    if (socket) {
-      console.log('Disconnecting WebSocket...');
-      socket.onopen = null; // Remove listeners to prevent actions on closing socket
-      socket.onmessage = null;
-      socket.onerror = null;
-      socket.onclose = null;
+    if (socket && subscriptions.length > 0) {
+      console.log('Unsubscribing and disconnecting WebSocket...');
+      socket.send(JSON.stringify({
+        action: 'SubRemove',
+        subs: subscriptions
+      }));
       socket.close();
       socket = null;
       isConnected.value = false;
-      // Don't clear prices on manual disconnect? Or maybe we should?
-      // prices.value = {};
+      subscriptions = [];
+    } else if (socket) {
+      socket.close();
+      socket = null;
+      isConnected.value = false;
     }
   };
 
-  // Watch for changes in the asset IDs and reconnect
   watch(currentAssetIds, (newIds, oldIds) => {
-    console.log('Asset IDs changed, reconnecting WebSocket...', newIds);
-    connect(); // Reconnect with the new list of assets
-  }, { deep: true }); // Use deep watch if the ref itself might contain an object/array
+    // When subscriptions change, create a new prices object
+    // that only contains the keys for the new subscriptions.
+    const newPrices = {};
+    for (const id of newIds) {
+      if (prices.value[id]) {
+        newPrices[id] = prices.value[id];
+      }
+    }
+    prices.value = newPrices;
 
-  onMounted(() => {
-    connect(); // Initial connection
-  });
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      const oldSymbols = oldIds.map(id => coinIdToSymbolMap[id.toLowerCase()]);
+      const newSymbols = newIds.map(id => coinIdToSymbolMap[id.toLowerCase()]);
 
-  onUnmounted(() => {
-    disconnect(); // Clean up connection when component unmounts
-  });
+      const oldSubs = oldSymbols.map(symbol => `2~Coinbase~${symbol}~USD`);
+      const newSubs = newSymbols.map(symbol => `2~Coinbase~${symbol}~USD`);
+
+      if (oldSubs.length > 0) {
+        socket.send(JSON.stringify({ action: 'SubRemove', subs: oldSubs }));
+      }
+      if (newSubs.length > 0) {
+        socket.send(JSON.stringify({ action: 'SubAdd', subs: newSubs }));
+      }
+      subscriptions = newSubs;
+    } else {
+      connect();
+    }
+  }, { deep: true });
+
+  onMounted(connect);
+  onUnmounted(disconnect);
 
   return {
     prices,
     isConnected,
     error,
   };
-}
-
-// Example Usage in a component:
-/*
-<script setup>
-import { ref } from 'vue';
-import { useRealtimeCryptoData } from '@/composables/useRealtimeCryptoData';
-
-// Define the crypto IDs you want to track (as a ref)
-const selectedCoins = ref(['bitcoin', 'ethereum']);
-
-const { prices, isConnected, error } = useRealtimeCryptoData(selectedCoins);
-
-// Change the tracked coins later:
-// selectedCoins.value = ['dogecoin', 'cardano']; // Composable will auto-reconnect
-</script>
-*/ 
+} 

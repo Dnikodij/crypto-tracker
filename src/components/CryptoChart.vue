@@ -1,93 +1,133 @@
 <template>
-  <v-container>
-    <!-- Time Range Selection -->
-    <v-row>
-      <v-col cols="12" class="d-flex align-center">
-        <v-select
-            v-model="selectedRange"
-            :items="rangeOptions"
-            label="Select Time Range (days)"
-            dense
-            outlined
-        ></v-select>
-      </v-col>
-    </v-row>
-    <!-- Coin Selection -->
+  <v-container fluid>
+    <!-- Chart Selection Section -->
     <v-row>
       <v-col cols="12">
-        <v-select
-            v-model="selectedCoins"
-            :items="coinOptions"
-            item-title="name"
-            item-value="id"
-            label="Select Cryptocurrencies"
-            multiple
-            chips
-        ></v-select>
-      </v-col>
-    </v-row>
-    <!-- Price Alert Setup -->
-    <v-row>
-      <v-col cols="12" class="d-flex align-center">
-        <v-select
-            v-model="alertCoin"
-            :items="coinOptions"
-            item-title="name"
-            item-value="id"
-            label="Select Coin for Alert"
-            dense
-            outlined
-        ></v-select>
-        <v-text-field
-            v-model="alertPrice"
-            label="Target Price (USD)"
-            type="number"
-            dense
-            outlined
-            class="ml-4"
-        ></v-text-field>
-        <v-btn color="primary" class="ml-4" @click="setPriceAlert">
-          Set Alert
-        </v-btn>
-      </v-col>
-    </v-row>
-    <!-- Loading & Error Display -->
-    <v-row>
-      <v-col cols="12">
-        <v-progress-linear
-            v-if="isLoading"
-            indeterminate
-            color="primary"
-            class="mb-4"
-        ></v-progress-linear>
-        <v-alert
-            v-if="errorMessage"
-            type="error"
-            dismissible
-            class="mb-4"
-        >
-          {{ errorMessage }}
-        </v-alert>
-      </v-col>
-    </v-row>
-    <!-- Chart Display -->
-    <v-row>
-      <v-col cols="12">
-        <highcharts :options="chartOptions" ref="chartRef" />
+        <v-card class="mb-4" variant="outlined">
+          <v-card-title class="text-h6">Chart Selection</v-card-title>
+          <v-card-text class="d-flex align-center flex-wrap gap-4">
+            <v-select
+                v-model="selectedRange"
+                :items="rangeOptions"
+                label="Time Range"
+                hide-details
+                density="compact"
+                variant="outlined"
+                style="max-width: 200px;"
+                class="mr-4"
+            ></v-select>
+            <v-select
+                v-model="primaryCoin"
+                :items="coinOptions"
+                item-title="name"
+                item-value="id"
+                label="Primary Coin"
+                hide-details
+                density="compact"
+                variant="outlined"
+                style="max-width: 200px;"
+                class="mr-4"
+            ></v-select>
+
+            <div class="d-flex align-center gap-4">
+              <v-select
+                  v-model="comparisonCoin"
+                  :items="availableComparisonCoins"
+                  item-title="name"
+                  item-value="id"
+                  label="Add Coin"
+                  placeholder="Select a coin to compare"
+                  hide-details
+                  density="compact"
+                  variant="outlined"
+                  style="width: 140px"
+                  class="mr-4"
+              ></v-select>
+              <v-tooltip text="Add a cryptocurrency for side-by-side comparison">
+                <template v-slot:activator="{ props }">
+                  <v-btn 
+                    v-bind="props" 
+                    color="primary" 
+                    @click="addComparisonChart" 
+                    :disabled="!comparisonCoin"
+                    density="compact"
+                    variant="elevated"
+                    prepend-icon="mdi-plus"
+                  >
+                    Add
+                  </v-btn>
+                </template>
+              </v-tooltip>
+            </div>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
 
-    <!-- Real-time Prices -->
+    <!-- Price Alerts Section -->
+    <v-row>
+      <v-col cols="12">
+        <v-card class="mb-4" variant="outlined">
+          <v-card-title class="text-h6">Price Alerts</v-card-title>
+          <v-card-text class="d-flex align-center flex-wrap gap-4">
+            <v-select
+                v-model="alertCoin"
+                :items="coinOptions"
+                item-title="name"
+                item-value="id"
+                label="Select Coin for Alert"
+                hide-details
+                density="compact"
+                variant="outlined"
+                class="mr-4"
+                style="max-width: 200px;"
+            ></v-select>
+            <v-text-field
+                v-model="alertPrice"
+                label="Target Price (USD)"
+                type="number"
+                hide-details="auto"
+                density="compact"
+                variant="outlined"
+                class="mr-4"
+                style="max-width: 200px;"
+                :rules="[
+                  v => (v && v > 0.01) || 'Price must be greater than $0.01',
+                  v => (/^\d+(\.\d{1,2})?$/.test(v) && !/^0+$/.test(v)) || 'Enter a valid positive number (no leading zeros)'
+                ]"
+                :disabled="!alertCoin"
+            ></v-text-field>
+            <v-tooltip text="Set an alert when the selected coin reaches the target price">
+              <template v-slot:activator="{ props }">
+                <v-btn 
+                  v-bind="props" 
+                  color="warning" 
+                  @click="setPriceAlert"
+                  :disabled="!alertCoin || !alertPrice || !isValidAlertPrice"
+                  density="compact"
+                  variant="elevated"
+                  prepend-icon="mdi-bell"
+                >
+                  Set Alert
+                </v-btn>
+              </template>
+            </v-tooltip>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Live Prices Section -->
     <v-row v-if="isRealtimeConnected && Object.keys(realtimePrices).length > 0">
       <v-col cols="12">
-        <v-card outlined class="mt-4">
+        <v-card outlined class="mb-4">
           <v-card-title>Live Prices (USD)</v-card-title>
           <v-card-text>
             <v-chip
               v-for="(price, id) in realtimePrices"
               :key="id"
               class="ma-1"
-              color="green"
+              :color="coinColors[id]"
               label
               text-color="white"
             >
@@ -97,16 +137,50 @@
         </v-card>
       </v-col>
     </v-row>
-    <v-row v-else-if="!isRealtimeConnected">
-       <v-col cols="12">
-         <v-alert type="info" dense outlined class="mt-4">
-           Real-time data connection status: {{ realtimeError ? 'Error' : 'Disconnected' }}
-           <span v-if="realtimeError"> - {{ realtimeError.message }}</span>
-         </v-alert>
-       </v-col>
+
+    <!-- Loading and Error States -->
+    <v-row v-if="isLoading">
+      <v-col cols="12">
+        <v-progress-linear indeterminate color="primary" class="mb-4"></v-progress-linear>
+      </v-col>
+    </v-row>
+    <v-row v-if="errorMessage">
+      <v-col cols="12">
+        <v-alert type="error" dismissible class="mb-4">
+          {{ errorMessage }}
+        </v-alert>
+      </v-col>
     </v-row>
 
-    <!-- Snackbar Notification -->
+    <!-- Charts Section -->
+    <v-row>
+      <v-col
+        v-for="coinId in selectedCoins"
+        :key="coinId"
+        cols="12"
+        :md="selectedCoins.length > 1 ? 6 : 12"
+      >
+        <v-card>
+          <v-card-title class="text-center position-relative">
+            {{ coinOptions.find(c => c.id === coinId)?.name }}
+            <v-btn
+              v-if="coinId !== primaryCoin"
+              size="small"
+              variant="text"
+              @click="removeChart(coinId)"
+              style="position: absolute; top: 50%; right: 16px; transform: translateY(-50%);"
+            >
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </v-card-title>
+          <v-card-text>
+            <highcharts v-if="chartOptions[coinId]" :options="chartOptions[coinId]" :ref="el => setChartRef(coinId, el)" />
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Snackbar for Alerts -->
     <v-snackbar v-model="showSnackbar" timeout="5000" color="success">
       {{ snackbarMessage }}
     </v-snackbar>
@@ -114,86 +188,129 @@
 </template>
 
 <script>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, toRaw, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import axios from 'axios'
 import { db } from '../firebase.js'
 import { collection, addDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore'
 import { useRealtimeCryptoData } from '../composables/useRealtimeCryptoData'
-import Highcharts from 'highcharts'; // Import Highcharts if needed for addPoint access
-import { Chart } from 'highcharts-vue'; // Assuming this is the component used
+import { useSettingsStore } from '../store/settings'
+import Highcharts from 'highcharts';
+import { Chart } from 'highcharts-vue';
 
 export default {
   name: 'CryptoChart',
   components: {
-    highcharts: Chart // Register the highcharts-vue component
+    highcharts: Chart
   },
   setup() {
-    const MAX_LIVE_POINTS = 120; // Keep roughly the last ~2 minutes of frequent updates
+    const settingsStore = useSettingsStore();
+    const {
+      selectedCoins,
+      selectedRange,
+      alertCoin,
+      alertPrice,
+    } = storeToRefs(settingsStore);
 
-    // Available coins for selection
+    const primaryCoin = ref(selectedCoins.value[0] || 'bitcoin');
+    const comparisonCoin = ref(null);
+
+    const availableComparisonCoins = computed(() => {
+      return coinOptions.filter(c => !selectedCoins.value.includes(c.id));
+    });
+
+    const MAX_LIVE_POINTS = 120;
+
     const coinOptions = [
       { id: 'bitcoin', name: 'Bitcoin' },
       { id: 'ethereum', name: 'Ethereum' },
       { id: 'litecoin', name: 'Litecoin' },
     ]
-    // Default selection for charting
-    const selectedCoins = ref([coinOptions[0].id])
-    // Reference to the chart instance
-    const chartRef = ref(null);
-    // Initial chart options
-    const chartOptions = ref({
-      chart: { type: 'line', zoomType: 'x' }, // zoomType might be less relevant for live view
-      title: { text: 'Cryptocurrency Prices' }, // Title will be updated dynamically
-      xAxis: {
-          type: 'datetime', // Use time-based axis for live data
-          // categories: [] // Remove categories for datetime axis
-      },
-      yAxis: { title: { text: 'Price in USD' } },
-      plotOptions: { // Default plot options
-          series: {
-              marker: { enabled: false },
-              dataLabels: { enabled: false },
-          }
-       },
-      series: [] // Start with empty series
-    })
-    // Time range options and default (days)
+    const coinColors = {
+      bitcoin: 'red',
+      ethereum: 'green',
+      litecoin: 'blue',
+    };
+
+    const chartRefs = ref({});
+    const setChartRef = (coinId, el) => {
+      if (el) {
+        chartRefs.value[coinId] = el;
+      }
+    };
+    const chartOptions = ref({});
     const rangeOptions = [
-      { title: 'Live (Last Hour)', value: 1 }, // Use object for better label
+      { title: 'Live (Last Hour)', value: 1 },
       { title: '7 Days', value: 7 },
       { title: '30 Days', value: 30 }
     ]
-    const selectedRange = ref(rangeOptions[0].value) // Default to Live
-    // Loading and error states
     const isLoading = ref(false)
     const errorMessage = ref('')
-    // Price Alerts stored in Firestore
     const priceAlerts = ref([])
-    // Inputs for setting a new price alert
-    const alertCoin = ref(coinOptions[0].id)
-    const alertPrice = ref('')
-    // Snackbar state for notifications
     const showSnackbar = ref(false)
     const snackbarMessage = ref('')
 
-    // --- Real-time Data Setup ---
     const {
       prices: realtimePrices,
       isConnected: isRealtimeConnected,
       error: realtimeError
     } = useRealtimeCryptoData(selectedCoins)
 
-    // Real-time subscription: Load price alerts from Firestore
     onMounted(() => {
+      if (selectedCoins.value.length === 0) {
+        selectedCoins.value.push('bitcoin');
+      }
+      primaryCoin.value = selectedCoins.value[0];
+
       const alertsCol = collection(db, 'priceAlerts');
       onSnapshot(alertsCol, snapshot => {
         priceAlerts.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       });
-      // Initial setup based on default selectedRange
-      setupChartForRange(selectedRange.value);
+      selectedCoins.value.forEach(coinId => {
+        setupChartForRange(selectedRange.value, coinId);
+      });
     });
 
-    // Function to add a new price alert to Firestore
+    const addComparisonChart = () => {
+      if (comparisonCoin.value && !selectedCoins.value.includes(comparisonCoin.value)) {
+        selectedCoins.value.push(comparisonCoin.value);
+        setupChartForRange(selectedRange.value, comparisonCoin.value);
+        comparisonCoin.value = null; // Reset the dropdown
+      }
+    };
+
+    const removeChart = (coinId) => {
+      const index = selectedCoins.value.indexOf(coinId);
+      if (index > -1) {
+        // Create a new array to ensure watchers trigger correctly.
+        selectedCoins.value = selectedCoins.value.filter(c => c !== coinId);
+        delete chartOptions.value[coinId];
+        delete chartRefs.value[coinId];
+      }
+    };
+
+    const checkLivePriceAlerts = async () => {
+      const currentPrices = realtimePrices.value;
+      if (!currentPrices || Object.keys(currentPrices).length === 0) return;
+
+      for (const alert of priceAlerts.value) {
+        const livePrice = currentPrices[alert.coinId];
+        if (livePrice !== undefined) {
+          const numericLivePrice = Number(livePrice);
+          if (numericLivePrice >= alert.targetPrice) {
+            const coinName = coinOptions.find(c => c.id === alert.coinId)?.name || alert.coinId;
+            snackbarMessage.value = `LIVE Alert: ${coinName} has reached $${numericLivePrice.toFixed(2)}`;
+            showSnackbar.value = true;
+            try {
+              await deleteDoc(doc(db, 'priceAlerts', alert.id));
+            } catch (error) {
+               console.error(`Error deleting alert ${alert.id}:`, error);
+            }
+          }
+        }
+      }
+    };
+
     const setPriceAlert = async () => {
       if (!alertCoin.value || !alertPrice.value) return
       try {
@@ -203,15 +320,13 @@ export default {
           targetPrice: Number(alertPrice.value),
           createdAt: new Date()
         })
-        // Reset input fields after setting alert
-        alertCoin.value = coinOptions[0].id
-        alertPrice.value = ''
+        alertCoin.value = 'bitcoin';
+        alertPrice.value = '';
       } catch (error) {
         console.error("Error setting price alert:", error)
       }
     }
 
-    // Fetch market chart data for a specific coin using the selected time range
     const fetchCoinData = async (coinId) => {
       try {
         const response = await axios.get(
@@ -229,177 +344,121 @@ export default {
       }
     }
 
-    // Check LIVE prices against stored price alerts using data from WebSocket
-    const checkLivePriceAlerts = async () => {
-      const currentPrices = realtimePrices.value;
-      if (!currentPrices || Object.keys(currentPrices).length === 0) return; // No live prices yet
-
-      for (const alert of priceAlerts.value) {
-        const livePrice = currentPrices[alert.coinId];
-        if (livePrice !== undefined) { // Check if we have a live price for the alerted coin
-          const numericLivePrice = Number(livePrice);
-          if (numericLivePrice >= alert.targetPrice) {
-            const coinName = coinOptions.find(c => c.id === alert.coinId)?.name || alert.coinId;
-            snackbarMessage.value = `LIVE Alert: ${coinName} has reached $${numericLivePrice.toFixed(2)}`;
-            showSnackbar.value = true;
-            // Remove alert from Firestore
-            try {
-              console.log(`Attempting to delete alert ${alert.id} for ${coinName} which reached ${numericLivePrice.toFixed(2)} (target: ${alert.targetPrice})`);
-              await deleteDoc(doc(db, 'priceAlerts', alert.id));
-               console.log(`Deleted alert ${alert.id} for ${coinName}`);
-            } catch (error) {
-               console.error(`Error deleting alert ${alert.id}:`, error);
-            }
-          }
-        }
-      }
-    };
-
-    // Watch for updates in real-time prices to add points or update last point
     watch(realtimePrices, (newPrices) => {
       if (!isRealtimeConnected.value || selectedRange.value !== 1) {
-          // Only add points if connected AND in live mode
           return;
       }
       if (!newPrices || Object.keys(newPrices).length === 0) return;
 
-      // Get the Highcharts chart instance
-      // Accessing the chart instance might depend on the highcharts-vue wrapper.
-      // Common ways include using a ref on the component or accessing it via chartOptions callbacks.
-      // We will assume direct modification of chartOptions.series triggers internal updates,
-      // but direct chart instance access might be needed for addPoint.
-      // For now, we stick to modifying chartOptions.value.series, which is less efficient for addPoint.
-      // --> Let's try direct instance access IF AVAILABLE.
-      const chart = chartRef.value?.chart; // Get chart instance if ref is set up
-      if (!chart) {
-          console.warn("Chart instance not available for adding points.");
-          // Fallback or alternative: Modify chartOptions.value.series (less ideal for addPoint)
-          return;
-      }
-
-      const currentSeries = chart.series; // Access series from the chart instance
-      if (!currentSeries || currentSeries.length === 0) return; // Chart not ready or mode mismatch
-
       Object.entries(newPrices).forEach(([coinId, price]) => {
+        const chart = chartRefs.value[coinId]?.chart;
+        if (!chart) return;
+        
         const numericPrice = Number(price);
         const timestamp = Date.now();
-
-        const seriesIndex = chart.series.findIndex(s => s.name === (coinOptions.find(c => c.id === coinId)?.name || coinId));
-
-        if (seriesIndex !== -1) {
-            const series = chart.series[seriesIndex];
-            const shift = series.data.length >= MAX_LIVE_POINTS; // Shift if exceeds max points
-
-            // Add the new point using Highcharts API
-            series.addPoint([timestamp, numericPrice], true, shift);
+        const series = chart.series[0]; // Assuming one series per chart
+        if (series) {
+          const shift = series.data.length >= MAX_LIVE_POINTS;
+          series.addPoint([timestamp, numericPrice], true, shift);
         }
       });
 
-      // Also check alerts with the latest prices
       checkLivePriceAlerts();
     }, { deep: true });
 
-    // Setup chart based on selected time range
-    function setupChartForRange(range) {
-        // Clear existing series data safely
-        if (chartRef.value?.chart) {
-            while (chartRef.value.chart.series.length > 0) {
-                 chartRef.value.chart.series[0].remove(false); // remove without redraw
+    function setupChartForRange(range, coinId) {
+        const existingChart = chartRefs.value[coinId]?.chart;
+        if (existingChart) {
+            while (existingChart.series.length > 0) {
+                 existingChart.series[0].remove(false);
             }
-            chartRef.value.chart.redraw(); // redraw once after removing all
+            existingChart.redraw();
         }
-         chartOptions.value.series = []; // Also clear the options ref
 
         if (range === 1) {
-            // --- Live Mode Setup ---
-            isLoading.value = true; // Show loading briefly
+            isLoading.value = true;
             errorMessage.value = '';
-            chartOptions.value.title.text = 'Live Cryptocurrency Prices (Last Hour View)';
-            chartOptions.value.xAxis.type = 'datetime';
-            // Remove fixed categories if they exist from previous state
-            // delete chartOptions.value.xAxis.categories;
+            fetchLastHourData(coinId).then(historicalData => {
+                chartOptions.value[coinId] = createChartOptions(historicalData);
+                
+                if (historicalData.data.length > 0) {
+                    const lastPrice = historicalData.data[historicalData.data.length - 1][1];
+                    realtimePrices.value[coinId] = lastPrice;
+                }
 
-            // Fetch initial prices to start the lines
-            fetchInitialPrices(selectedCoins.value).then(initialData => {
-                chartOptions.value.series = initialData;
                 isLoading.value = false;
             }).catch(err => {
-                errorMessage.value = 'Failed to fetch initial prices.';
+                errorMessage.value = `Failed to fetch data for ${coinId}.`;
                 isLoading.value = false;
             });
-
         } else {
-            // --- Historical Mode Setup ---
-            chartOptions.value.xAxis.type = 'categories'; // Switch back if needed, or keep datetime?
-                                                          // Let's keep datetime and format labels
-             chartOptions.value.xAxis.type = 'datetime';
-             chartOptions.value.xAxis.dateTimeLabelFormats = { // Format labels for days
-                day: '%e %b',
-                week: '%e %b', // Adjust as needed
-                month: '%b \'%y',
-             };
-            // Use the existing updateChart for historical data
-            updateChart();
+            updateChart(coinId);
+        }
+    }
+    
+    function createChartOptions(seriesData) {
+      const coinName = coinOptions.find(c => c.id === seriesData.id)?.name || seriesData.id;
+      const color = coinColors[seriesData.id] || '#000000';
+      return {
+        accessibility: { enabled: false },
+        chart: { type: 'line', zoomType: 'x' },
+        title: { text: null },
+        xAxis: { type: 'datetime' },
+        yAxis: { title: { text: null }, labels: { format: '${value:,.0f}' } },
+        legend: {
+          enabled: false
+        },
+        tooltip: {
+          formatter: function() {
+            return `<b>${new Date(this.x).toLocaleTimeString()}</b><br/>${this.series.name}: <b>$${this.y.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>`;
+          }
+        },
+        series: [{
+          name: coinName,
+          data: seriesData.data,
+          id: seriesData.id,
+          color: color
+        }]
+      };
+    }
+
+    async function fetchLastHourData(coinId) {
+        if (!coinId) return [];
+        try {
+            const response = await axios.get(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart`, {
+                params: {
+                    vs_currency: 'usd',
+                    days: 1
+                }
+            });
+            const now = Date.now();
+            const oneHourAgo = now - (60 * 60 * 1000); 
+            const lastHourPrices = response.data.prices.filter(([timestamp]) => timestamp >= oneHourAgo);
+            
+            return {
+                data: lastHourPrices,
+                id: coinId
+            };
+        } catch (error) {
+            console.error(`Error fetching last hour data for ${coinId}:`, error);
+            throw new Error(`Failed to fetch last hour data for ${coinId}.`);
         }
     }
 
-    // Fetch initial prices for selected coins (e.g., from CoinCap REST API)
-    async function fetchInitialPrices(coinIds) {
-       if (!coinIds || coinIds.length === 0) return [];
-       try {
-           const ids = coinIds.join(',');
-           // Use CoinCap REST API v2 for current prices
-           const response = await axios.get(`https://api.coincap.io/v2/assets?ids=${ids}`);
-           const timestamp = Date.now();
-           return coinIds.map(id => {
-               const assetData = response.data.data.find(asset => asset.id === id);
-               const price = assetData ? parseFloat(assetData.priceUsd) : null;
-               const coin = coinOptions.find(c => c.id === id);
-               return {
-                   name: coin ? coin.name : id,
-                   data: price !== null ? [[timestamp, price]] : [] // Start with one point
-               };
-           });
-       } catch (error) {
-           console.error("Error fetching initial prices:", error);
-           throw new Error('Failed to fetch initial prices.');
-       }
-    }
-
-    // Fetches and updates chart with HISTORICAL data (for 7/30 day views)
-    const updateChart = async () => {
+    const updateChart = async (coinId) => {
       isLoading.value = true
       errorMessage.value = ''
       try {
-        const promises = selectedCoins.value.map(coinId => fetchCoinData(coinId))
-        const results = await Promise.all(promises)
+        const data = await fetchCoinData(coinId);
+        const seriesData = {
+          data: data?.prices ? data.prices.map(price => [price[0], price[1]]) : [],
+          id: coinId
+        };
+        chartOptions.value[coinId] = createChartOptions(seriesData);
 
-        const currentRange = selectedRange.value;
-        let chartTitle = `Cryptocurrency Prices (USD) - Last ${currentRange} Days`;
-
-        // Map historical data to [timestamp, price] format for datetime axis
-        const series = results.map((data, index) => {
-          const coin = coinOptions.find(c => c.id === selectedCoins.value[index])
-          return {
-            name: coin ? coin.name : selectedCoins.value[index],
-            data: data?.prices ? data.prices.map(price => [price[0], price[1]]) : [] // Use [timestamp, value]
-          }
-        })
-
-        chartOptions.value = {
-            ...chartOptions.value, // Keep common options like yAxis
-            title: { text: chartTitle },
-            xAxis: {
-                ...chartOptions.value.xAxis, // Keep type: 'datetime'
-                // categories: undefined // Ensure categories are not used for datetime
-            },
-            plotOptions: { // Reset plotOptions for historical view maybe?
-                 series: {
-                     marker: { enabled: false }, // Example: less emphasis on markers
-                     dataLabels: { enabled: false },
-                 }
-            },
-            series
+        if (seriesData.data.length > 0) {
+            const lastPrice = seriesData.data[seriesData.data.length - 1][1];
+            realtimePrices.value[coinId] = lastPrice;
         }
       } catch (error) {
          console.error(error)
@@ -409,26 +468,41 @@ export default {
       }
     }
 
-    // Update chart automatically when selected coins or time range change
-    // Watch selectedRange to switch between Live and Historical modes
-    watch(selectedRange, (newRange, oldRange) => {
-        if (newRange !== oldRange) {
-            setupChartForRange(newRange);
-        }
+    watch(selectedRange, (newRange) => {
+        selectedCoins.value.forEach(coinId => {
+            setupChartForRange(newRange, coinId);
+        });
     });
 
-    // Watch selectedCoins - needs to re-setup the chart in either mode
-    watch(selectedCoins, () => {
-         // Re-run the setup for the current range
-         setupChartForRange(selectedRange.value);
-    }, { deep: true });
+    watch(primaryCoin, (newCoin, oldCoin) => {
+      if (newCoin && oldCoin && newCoin !== oldCoin) {
+        const index = selectedCoins.value.indexOf(oldCoin);
+        if (index !== -1) {
+          // Create a new array to ensure watchers trigger correctly,
+          // by replacing the old primary coin with the new one.
+          const newSelectedCoins = [...selectedCoins.value];
+          newSelectedCoins[index] = newCoin;
+          selectedCoins.value = newSelectedCoins;
+
+          // Clean up the old chart and create the new one
+          delete chartOptions.value[oldCoin];
+          delete chartRefs.value[oldCoin];
+          setupChartForRange(selectedRange.value, newCoin);
+        }
+      }
+    });
+
+    const isValidAlertPrice = computed(() => {
+      return alertPrice.value !== null && alertPrice.value !== undefined && alertPrice.value > 0.01 && alertPrice.value <= 10000000 && (/^\d+(\.\d{1,2})?$/.test(alertPrice.value) && !/^0+$/.test(alertPrice.value));
+    });
 
     return {
-      chartRef, // Expose chartRef if needed externally (usually not)
+      chartRefs,
+      setChartRef,
       coinOptions,
       selectedCoins,
       chartOptions,
-      rangeOptions, // Use updated rangeOptions
+      rangeOptions,
       selectedRange,
       isLoading,
       errorMessage,
@@ -440,6 +514,13 @@ export default {
       realtimePrices,
       isRealtimeConnected,
       realtimeError,
+      primaryCoin,
+      comparisonCoin,
+      availableComparisonCoins,
+      addComparisonChart,
+      removeChart,
+      coinColors,
+      isValidAlertPrice
     }
   }
 }

@@ -23,13 +23,28 @@ const router = createRouter({
     routes
 })
 
-// Route guard to check for authentication
-router.beforeEach((to, from, next) => {
+const getCurrentUser = () => {
+  return new Promise((resolve, reject) => {
+    const removeListener = auth.onAuthStateChanged(
+      user => {
+        removeListener();
+        resolve(user);
+      },
+      reject
+    )
+  })
+}
+
+router.beforeEach(async (to, from, next) => {
     const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-    const currentUser = auth.currentUser
+    const currentUser = await getCurrentUser();
+
     if (requiresAuth && !currentUser) {
         next({ name: 'Login' })
-    } else {
+    } else if (!requiresAuth && currentUser) {
+        next({ name: 'Dashboard' })
+    }
+    else {
         next()
     }
 })
