@@ -15,6 +15,7 @@
     "firebase": "^11.4.0",
     "highcharts": "^12.1.2",
     "highcharts-vue": "^2.0.1",
+    "pinia": "^3.0.4",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
     "vuetify": "^3.7.0-beta.1"
